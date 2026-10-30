@@ -10,7 +10,12 @@ CATEGORIES = ["Food", "Transport", "Utilities", "Entertainment"]
 
 class ExpenseTracker:
     def __init__(self, filename="expenses.csv"):
-        self.filename = filename
+        if not os.path.isabs(filename):
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            self.filename = os.path.join(base_dir, filename)
+        else:
+            self.filename = filename
+
         self.data = pd.DataFrame(columns=["Date", "Amount", "Category", "Description"])
         self.load_data()
 
@@ -37,7 +42,7 @@ class ExpenseTracker:
 
     def save_data(self):
         export_df = self.data.copy()
-        export_df["Date"] = export_df["Date"].dt.strftime("%Y-%m-%d")
+        export_df["Date"] = pd.to_datetime(export_df["Date"]).dt.strftime("%Y-%m-%d")
         export_df.to_csv(self.filename, index=False)
 
     def add_expense(self, date, amount, category, description):
@@ -52,11 +57,11 @@ class ExpenseTracker:
         self.data = pd.concat([self.data, new_row], ignore_index=True)
         self.data = self.data.sort_values(by="Date").reset_index(drop=True)
         self.save_data()
-        print("Expense added successfully.")
+        print("\nExpense added successfully.")
 
     def get_summary(self):
         if self.data.empty:
-            print("No expenses recorded yet.")
+            print("\nNo expenses recorded yet.")
             return {}
 
         # Calculations using NumPy arrays
@@ -71,19 +76,23 @@ class ExpenseTracker:
             "count": count
         }
 
-        print("\n--- Expense Summary ---")
+        print("\n" + "=" * 45)
+        print("            EXPENSE SUMMARY")
+        print("=" * 45)
         print(f"Total Transactions : {count}")
         print(f"Total Spent        : ${total_expense:,.2f}")
         print(f"Average Expense    : ${avg_expense:,.2f}")
+        print("-" * 45)
 
         # Category totals using Pandas & NumPy
         cat_group = self.data.groupby("Category")["Amount"].sum()
         cat_totals = np.array(cat_group.values)
         cat_names = cat_group.index.tolist()
 
-        print("\nCategory-wise Breakdown:")
+        print("Category-wise Breakdown:")
         for name, val in zip(cat_names, cat_totals):
             print(f"  {name:<15}: ${val:,.2f}")
+        print("=" * 45)
 
         return summary
 
@@ -117,7 +126,7 @@ class ExpenseTracker:
 
     def generate_report(self):
         if self.data.empty:
-            print("No expense data available to generate report.")
+            print("\nNo expense data available to generate report.")
             return
 
         amounts = np.array(self.data["Amount"].values, dtype=float)
@@ -162,7 +171,7 @@ class ExpenseTracker:
 
     def plot_category_bar(self):
         if self.data.empty:
-            print("No data available to plot.")
+            print("\nNo data available to plot.")
             return
 
         cat_data = self.data.groupby("Category")["Amount"].sum().reset_index()
@@ -178,7 +187,7 @@ class ExpenseTracker:
 
     def plot_trend_line(self):
         if self.data.empty:
-            print("No data available to plot.")
+            print("\nNo data available to plot.")
             return
 
         daily_trend = self.data.groupby(self.data["Date"].dt.date)["Amount"].sum().reset_index()
@@ -195,7 +204,7 @@ class ExpenseTracker:
 
     def plot_category_pie(self):
         if self.data.empty:
-            print("No data available to plot.")
+            print("\nNo data available to plot.")
             return
 
         cat_totals = self.data.groupby("Category")["Amount"].sum()
@@ -216,7 +225,7 @@ class ExpenseTracker:
 
     def plot_amount_histogram(self):
         if self.data.empty:
-            print("No data available to plot.")
+            print("\nNo data available to plot.")
             return
 
         plt.figure(figsize=(8, 5))
@@ -271,17 +280,21 @@ def get_validated_category():
 
 
 def display_expenses_table(df):
-    if df.empty:
-        print("No matching expenses found.")
+    if df is None or df.empty:
+        print("\nNo matching expenses found.")
         return
 
-    print("\n" + "-" * 72)
-    print(f"{'Date':<12} | {'Category':<15} | {'Amount ($)':<10} | {'Description'}")
-    print("-" * 72)
+    print("\n" + "=" * 76)
+    print(f"{'Date':<12} | {'Category':<15} | {'Amount ($)':<12} | {'Description'}")
+    print("=" * 76)
     for _, row in df.iterrows():
-        date_str = row["Date"].strftime("%Y-%m-%d") if isinstance(row["Date"], pd.Timestamp) else str(row["Date"])
-        print(f"{date_str:<12} | {row['Category']:<15} | {row['Amount']:>10.2f} | {row['Description']}")
-    print("-" * 72)
+        if isinstance(row["Date"], pd.Timestamp):
+            date_str = row["Date"].strftime("%Y-%m-%d")
+        else:
+            date_str = str(row["Date"])[:10]
+        print(f"{date_str:<12} | {row['Category']:<15} | ${float(row['Amount']):>10.2f} | {row['Description']}")
+    print("=" * 76)
+    print(f"Total Records: {len(df)}")
 
 
 def main():
@@ -299,7 +312,7 @@ def main():
         print("6. Data Visualizations")
         print("7. Exit")
 
-        choice = input("\nEnter choice (1-7): ").strip()
+        choice = input("\nEnter choice (1-7): ").strip().rstrip(".")
 
         if choice == "1":
             date = get_validated_date()
@@ -307,19 +320,22 @@ def main():
             amount = get_validated_amount()
             desc = input("Enter short description: ").strip()
             tracker.add_expense(date, amount, category, desc)
+            input("\nPress Enter to return to main menu...")
 
         elif choice == "2":
             display_expenses_table(tracker.data)
+            input("\nPress Enter to return to main menu...")
 
         elif choice == "3":
             tracker.get_summary()
+            input("\nPress Enter to return to main menu...")
 
         elif choice == "4":
             print("\nFilter by:")
             print("1. Category")
             print("2. Date Range")
             print("3. Amount Range")
-            f_choice = input("Select option (1-3): ").strip()
+            f_choice = input("Select option (1-3): ").strip().rstrip(".")
 
             condition = {}
             if f_choice == "1":
@@ -340,9 +356,11 @@ def main():
 
             results = tracker.filter_expenses(condition)
             display_expenses_table(results)
+            input("\nPress Enter to return to main menu...")
 
         elif choice == "5":
             tracker.generate_report()
+            input("\nPress Enter to return to main menu...")
 
         elif choice == "6":
             print("\nSelect Visualization:")
@@ -350,7 +368,7 @@ def main():
             print("2. Line Graph (Spending Trends Over Time)")
             print("3. Pie Chart (Spending Distribution)")
             print("4. Histogram (Frequency of Amounts)")
-            v_choice = input("Enter choice (1-4): ").strip()
+            v_choice = input("Enter choice (1-4): ").strip().rstrip(".")
 
             if v_choice == "1":
                 tracker.plot_category_bar()
@@ -362,6 +380,7 @@ def main():
                 tracker.plot_amount_histogram()
             else:
                 print("Invalid visualization choice.")
+            input("\nPress Enter to return to main menu...")
 
         elif choice == "7":
             print("Exiting application. Goodbye!")
